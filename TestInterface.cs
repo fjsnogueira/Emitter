@@ -7,6 +7,7 @@ namespace Emitter
 		int Bar { get; }
 
 		void DoFoo();
+		void DoFooAgain(int i, int j);
 		int DoBar(int bar);
 		int DoFoobar(string sVersion, int nVersion, long justALong);
 	}

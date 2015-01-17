@@ -9,7 +9,16 @@ namespace Emitter
 {
 	public static class ILEmitter
 	{
+		#region Constants & Readonly's
+
 		private const string METHOD_DICTIONARY = "_methodImplementations";
+
+		private static readonly Type OBJ_TYPE = typeof(System.Object);
+		private static readonly Type OBJ_ARR_TYPE = typeof(object[]);
+		private static readonly Type DELEGATE_TYPE = typeof(Delegate);
+		private static readonly Type DEL_DICT_TYPE = typeof(IDictionary<string, Delegate>);
+
+		#endregion
 
 		public static T New<T>(MethodImpl[] implementations = null) where T : class
 		{
@@ -193,34 +202,106 @@ namespace Emitter
 
 			var mGenerator = mBuilder.GetILGenerator();
 
-			if (mi.ReturnType != typeof(void))
-			{
-				// If no implementation has been provided, then generate the IL to return the default value of the return type
-				if (!hasImplementation)
-				{
-					var localBuilder = mGenerator.DeclareLocal(mi.ReturnType);
+			//if (mi.ReturnType != typeof(void))
+			//{
+			//	// If no implementation has been provided, then generate the IL to return the default value of the return type
+			//	if (!hasImplementation)
+			//	{
+			//		var localBuilder = mGenerator.DeclareLocal(mi.ReturnType);
 
-					mGenerator.Emit(OpCodes.Ldloc, localBuilder);
+			//		mGenerator.Emit(OpCodes.Ldloc, localBuilder);
+			//	}
+			//	// Otherwise things are going to get tricky here
+			//	else
+			//	{
+			//		AddDelegateInvocation(mi, context, parameterTypes, mGenerator);
+			//	}
+			//}
+			if (hasImplementation)
+			{
+				if (mi.ReturnType == typeof(void))
+				{
+					AddVoidDelegateInvocation(mi, context, parameterTypes, mGenerator);
 				}
-				// Otherwise things are going to get tricky here
 				else
 				{
 					AddDelegateInvocation(mi, context, parameterTypes, mGenerator);
 				}
 			}
+			else if (mi.ReturnType != typeof(void))
+			{
+				var localBuilder = mGenerator.DeclareLocal(mi.ReturnType);
 
+				mGenerator.Emit(OpCodes.Ldloc, localBuilder);
+			}
+
+			mGenerator.Emit(OpCodes.Ret);
+		}
+
+		private static void AddVoidDelegateInvocation(MethodInfo mi, TypeCreationContext context, Type[] parameterTypes, ILGenerator mGenerator)
+		{
+			mGenerator.DeclareLocal(DELEGATE_TYPE);
+
+			bool hasParameters = parameterTypes != null && parameterTypes.Length > 0;
+
+			if (hasParameters)
+			{
+				mGenerator.DeclareLocal(OBJ_ARR_TYPE);
+				mGenerator.DeclareLocal(OBJ_ARR_TYPE);
+			}
+
+			mGenerator.Emit(OpCodes.Nop);
+			mGenerator.Emit(OpCodes.Ldarg_0);
+			mGenerator.Emit(OpCodes.Ldfld, context.Fields[METHOD_DICTIONARY]);
+			mGenerator.Emit(OpCodes.Ldstr, mi.Name);
+
+			var dictGetMethod = DEL_DICT_TYPE.GetMethod("get_Item", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+			mGenerator.Emit(OpCodes.Callvirt, dictGetMethod);
+			mGenerator.Emit(OpCodes.Stloc_0);
+
+			// Now if we need to deal with parameters lets do this now
+			if (hasParameters)
+			{
+				OpCode arraySize = GetSizeOpCode(parameterTypes.Length);
+
+				mGenerator.Emit(arraySize);
+
+				mGenerator.Emit(OpCodes.Newarr, OBJ_TYPE);
+				mGenerator.Emit(OpCodes.Stloc_2);
+				mGenerator.Emit(OpCodes.Ldloc_2);
+
+				for (int i = 0; i < parameterTypes.Length; i++)
+				{
+					mGenerator.Emit(GetSizeOpCode(i));
+					mGenerator.Emit(GetArgumentOpCode(i + 1));
+
+					if (parameterTypes[i].IsValueType)
+						mGenerator.Emit(OpCodes.Box, GetBoxedType(parameterTypes[i]));
+
+					mGenerator.Emit(OpCodes.Stelem_Ref);
+					mGenerator.Emit(OpCodes.Ldloc_2);
+				}
+
+				mGenerator.Emit(OpCodes.Stloc_1);
+			}
+
+			// Generate the IL to call the delegate properly
+			mGenerator.Emit(OpCodes.Ldloc_0);
+			mGenerator.Emit(hasParameters ? OpCodes.Ldloc_1 : OpCodes.Ldnull);
+			mGenerator.Emit(OpCodes.Callvirt, DELEGATE_TYPE.GetMethod("DynamicInvoke"));
+
+			// Return from the method properly
+			mGenerator.Emit(OpCodes.Pop);
 			mGenerator.Emit(OpCodes.Ret);
 		}
 
 		private static void AddDelegateInvocation(MethodInfo mi, TypeCreationContext context, Type[] parameterTypes, ILGenerator mGenerator)
 		{
-			var objArrType = typeof(object[]);
-			var delegateType = typeof(Delegate);
-
-			mGenerator.DeclareLocal(delegateType); // reference to delegate to call
-			mGenerator.DeclareLocal(objArrType); // Delegate parameter array
+			mGenerator.DeclareLocal(DELEGATE_TYPE); // reference to delegate to call
+			mGenerator.DeclareLocal(OBJ_ARR_TYPE); // Delegate parameter array
 			mGenerator.DeclareLocal(mi.ReturnType); // Return type
-			mGenerator.DeclareLocal(objArrType); // ??? I think its the parameter array that goes on the stack to call the delegate
+			mGenerator.DeclareLocal(OBJ_ARR_TYPE); // ??? I think its the parameter array that goes on the stack to call the delegate
 
 			// Generate the IL to get the delegate out of the private dictionary
 			mGenerator.Emit(OpCodes.Nop);
@@ -228,7 +309,7 @@ namespace Emitter
 			mGenerator.Emit(OpCodes.Ldfld, context.Fields[METHOD_DICTIONARY]);
 			mGenerator.Emit(OpCodes.Ldstr, mi.Name);
 
-			var dictGetMethod = typeof(IDictionary<string, Delegate>).GetMethod("get_Item", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+			var dictGetMethod = DEL_DICT_TYPE.GetMethod("get_Item", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
 			mGenerator.Emit(OpCodes.Callvirt, dictGetMethod);
 			mGenerator.Emit(OpCodes.Stloc_0);
@@ -238,7 +319,7 @@ namespace Emitter
 
 			mGenerator.Emit(arraySize);
 
-			mGenerator.Emit(OpCodes.Newarr, typeof(System.Object));
+			mGenerator.Emit(OpCodes.Newarr, OBJ_TYPE);
 			mGenerator.Emit(OpCodes.Stloc_3);
 			mGenerator.Emit(OpCodes.Ldloc_3);
 
@@ -261,7 +342,7 @@ namespace Emitter
 			// Generate the IL to call the delegate
 			mGenerator.Emit(OpCodes.Ldloc_0);
 			mGenerator.Emit(OpCodes.Ldloc_1);
-			mGenerator.Emit(OpCodes.Callvirt, delegateType.GetMethod("DynamicInvoke"));
+			mGenerator.Emit(OpCodes.Callvirt, DELEGATE_TYPE.GetMethod("DynamicInvoke"));
 
 			mGenerator.Emit(OpCodes.Unbox_Any, mi.ReturnType);
 			mGenerator.Emit(OpCodes.Stloc_2);

@@ -34,6 +34,15 @@ namespace Emitter
 			del.DynamicInvoke(null);
 		}
 
+		public void DoFooAgain(int i, int j)
+		{
+			Delegate del = methodImplementations["DoFooAgain"];
+
+			object[] parms = new object[] { i, j };
+
+			del.DynamicInvoke(parms);
+		}
+
 		public int DoBar(int bar)
 		{
 			return bar * 2;
