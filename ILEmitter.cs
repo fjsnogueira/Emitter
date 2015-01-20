@@ -202,21 +202,6 @@ namespace Emitter
 
 			var mGenerator = mBuilder.GetILGenerator();
 
-			//if (mi.ReturnType != typeof(void))
-			//{
-			//	// If no implementation has been provided, then generate the IL to return the default value of the return type
-			//	if (!hasImplementation)
-			//	{
-			//		var localBuilder = mGenerator.DeclareLocal(mi.ReturnType);
-
-			//		mGenerator.Emit(OpCodes.Ldloc, localBuilder);
-			//	}
-			//	// Otherwise things are going to get tricky here
-			//	else
-			//	{
-			//		AddDelegateInvocation(mi, context, parameterTypes, mGenerator);
-			//	}
-			//}
 			if (hasImplementation)
 			{
 				if (mi.ReturnType == typeof(void))
