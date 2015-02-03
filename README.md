@@ -24,7 +24,7 @@ Doing so returns a context object that allows you to work with your type before 
 If the interface and implementation signatures do not line up you will receive an ArgumentException.
 Now we create the type and call the method
 
-	var obj = context.CreateType() as TestInterface;
+	var obj = context.CreateInstance() as TestInterface;
 	obj.DoFoo(); // Writes out "Hello World" to the console
 
 #Desired Features
