@@ -7,11 +7,11 @@ using System.Threading;
 
 namespace Emitter
 {
-	public static class ILEmitter
+	public static class ILHelper
 	{
 		#region Constants & Readonly's
 
-		private const string METHOD_DICTIONARY = "_methodImplementations";
+		internal const string METHOD_DICTIONARY = "_methodImplementations";
 
 		private static readonly Type OBJ_TYPE = typeof(System.Object);
 		private static readonly Type OBJ_ARR_TYPE = typeof(object[]);
@@ -20,83 +20,7 @@ namespace Emitter
 
 		#endregion
 
-		public static T New<T>(MethodImpl[] implementations = null) where T : class
-		{
-			var type = typeof(T);
-
-			if (type.IsInterface)
-				return ImplementInterface<T>(implementations);
-
-			return null;
-		}
-
-		public static T ImplementInterface<T>(MethodImpl[] implementations = null) where T : class
-		{
-			var interfaceType = typeof(T);
-
-			if (!interfaceType.IsInterface)
-				throw new ArgumentException("Given type is not an interface");
-
-			// Get the assembly and module builders. These are required to start defining these types
-			var builders = GetAssemblyAndModuleBuilders();
-
-			// Create the builder for the new type
-			var typeBuilder = GetTypeBuilder(interfaceType, builders.Item2);
-
-			var context = new TypeCreationContext(typeBuilder);
-
-			// Now lets add the interface implementation
-			typeBuilder.AddInterfaceImplementation(interfaceType);
-
-			// Add implementation dictionary. This dictionary holds the delegates we call when a method on this dynamic implementation is invoked
-			if (implementations != null)
-				AddImplementationsDictionary(implementations, context);
-
-			// First lets add the default constructor
-			AddDefaultConstructor(context, implementations != null);
-
-			// Now lets add each property in the interface to our new type
-			var properties = interfaceType.GetProperties();
-			foreach (var pi in properties)
-				AddProperty(pi, context);
-
-			// Finally lets add each method in the interface to our new type.
-			// We have to explicitly exclude the getter and setter methods for the properties within the interface
-			var methods = interfaceType.GetMethods().Where(mi => !mi.Name.StartsWith("get_") && !mi.Name.StartsWith("set_"));
-			foreach (var mi in methods)
-				AddMethod(mi, context, implementations != null && implementations.Any(i => i.MethodName == mi.Name));
-
-			try
-			{
-				var actualType = typeBuilder.CreateType();
-
-#if DEBUG
-				builders.Item1.Save("TestAsm.dll");
-#endif
-
-				T instance = (T)Activator.CreateInstance(actualType);
-
-				if (implementations != null)
-				{
-					var dictField = actualType.GetField(METHOD_DICTIONARY, BindingFlags.NonPublic | BindingFlags.Instance);
-
-					var dict = (IDictionary<string, Delegate>)dictField.GetValue(instance);
-
-					foreach (var impl in implementations)
-						dict.Add(impl.MethodName, impl.Implementation);
-				}
-
-				return instance;
-			}
-			catch (Exception e)
-			{
-				Console.WriteLine(e.Message);
-			}
-
-			return null;
-		}
-
-		private static Tuple<AssemblyBuilder, ModuleBuilder> GetAssemblyAndModuleBuilders(string assemblyName = "DynamicAssembly")
+		internal static Tuple<AssemblyBuilder, ModuleBuilder> GetAssemblyAndModuleBuilders(string assemblyName = "DynamicAssembly")
 		{
 			var aName = new AssemblyName(assemblyName);
 
@@ -111,12 +35,12 @@ namespace Emitter
 #endif
 		}
 
-		private static TypeBuilder GetTypeBuilder(Type type, ModuleBuilder mBuilder)
+		internal static TypeBuilder GetTypeBuilder(Type type, ModuleBuilder mBuilder)
 		{
 			return mBuilder.DefineType(type.Name + "Impl", TypeAttributes.Public | TypeAttributes.Class);
 		}
 
-		private static void AddDefaultConstructor(TypeCreationContext context, bool hasImplementations)
+		internal static void AddDefaultConstructor(TypeCreationContext context, bool hasImplementations)
 		{
 			var ci = typeof(object).GetConstructor(Type.EmptyTypes);
 
@@ -141,7 +65,7 @@ namespace Emitter
 			generator.Emit(OpCodes.Ret);
 		}
 
-		private static void AddProperty(PropertyInfo pi, TypeCreationContext context)
+		internal static void AddProperty(PropertyInfo pi, TypeCreationContext context)
 		{
 			var backingFieldName = "_" + pi.Name;
 
@@ -149,14 +73,19 @@ namespace Emitter
 
 			context.Fields.Add(backingFieldName, fieldBuilder);
 
+			var propertyBuilder = context.TypeBuilder.DefineProperty(pi.Name, pi.Attributes, pi.PropertyType, null);
+
+			context.Properties.Add(pi.Name, propertyBuilder);
+
+			var methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+
 			var getter = pi.GetGetMethod();
 			if (getter != null)
-			{
-				var methodAttributes = MethodAttributes.Public | MethodAttributes.NewSlot | MethodAttributes.SpecialName | MethodAttributes.Virtual;
+			{				
 				if (getter.IsFinal)
 					methodAttributes |= MethodAttributes.Final;
 
-				var gmMethodBuilder = context.TypeBuilder.DefineMethod("get_" + pi.Name, methodAttributes, pi.PropertyType, Type.EmptyTypes);
+				var gmMethodBuilder = context.TypeBuilder.DefineMethod("get_" + pi.Name, methodAttributes | MethodAttributes.Virtual, pi.PropertyType, Type.EmptyTypes);
 
 				context.Methods.Add(gmMethodBuilder.Name, gmMethodBuilder);
 
@@ -166,13 +95,14 @@ namespace Emitter
 				gmGenerator.Emit(OpCodes.Ldfld, fieldBuilder);
 				gmGenerator.Emit(OpCodes.Ret);
 
+				propertyBuilder.SetGetMethod(gmMethodBuilder);
+
 				context.TypeBuilder.DefineMethodOverride(gmMethodBuilder, getter);
 			}
 
 			var setter = pi.GetSetMethod();
 			if (setter != null)
 			{
-				var methodAttributes = MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName;
 				if (setter.IsVirtual)
 					methodAttributes |= MethodAttributes.Virtual;
 
@@ -187,11 +117,13 @@ namespace Emitter
 				smGenerator.Emit(OpCodes.Stfld, fieldBuilder);
 				smGenerator.Emit(OpCodes.Ret);
 
+				propertyBuilder.SetSetMethod(smMethodBuilder);
+
 				context.TypeBuilder.DefineMethodOverride(smMethodBuilder, setter);
 			}
 		}
 
-		private static void AddMethod(MethodInfo mi, TypeCreationContext context, bool hasImplementation)
+		internal static void AddMethod(MethodInfo mi, TypeCreationContext context, bool hasImplementation)
 		{
 			// Get all the parameters to the method
 			var parameterTypes = mi.GetParameters().Select(pi => pi.ParameterType).ToArray();
@@ -337,11 +269,8 @@ namespace Emitter
 			mGenerator.Emit(OpCodes.Ldloc_2);
 		}
 
-		private static void AddImplementationsDictionary(IEnumerable<MethodImpl> implementations, TypeCreationContext context)
+		internal static void AddImplementationsDictionary(TypeCreationContext context)
 		{
-			if (implementations == null)
-				return;
-
 			var dictionaryField = context.TypeBuilder.DefineField(METHOD_DICTIONARY, typeof(IDictionary<string, Delegate>), FieldAttributes.Private);
 
 			context.Fields.Add(METHOD_DICTIONARY, dictionaryField);

@@ -6,16 +6,14 @@ namespace Emitter
 	{
 		static void Main(string[] args)
 		{
-			Func<int, int> doBarBody = i => i * 2;
-			Func<string, int, long, int> doFoobarBody = (s, i, l) => Int32.Parse(s) * i;
+			var context = TypeCreationContext.ImplementInterface<TestInterface>();
 
-			Action doFooBody = () => Console.WriteLine("Woohoo!");
-			Action<int, int> doFooAgainBody = (i, j) => Console.WriteLine("This is a test impl");
+			context.AddImplementation<int, int>("DoBar", i => i * 2);
+			context.AddImplmentation("DoFoo", () => Console.WriteLine("Doing this from a void implementation"));
 
-			var doFooBodyImpl = new MethodImpl { MethodName = "DoFooAgain", Implementation = doFooAgainBody };
-			var doFooBodyImple = new MethodImpl { MethodName = "DoFoo", Implementation = doFooBody };
-			
-			var obj = ILEmitter.New<TestInterface>(new [] { doFooBodyImpl, doFooBodyImple });
+			var obj = context.CreateType() as TestInterface;
+
+			var obj2 = TypeCreationContext.New<TestInterface>();
 
 			if (obj != null)
 			{
