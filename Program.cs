@@ -9,9 +9,9 @@ namespace Emitter
 			var context = TypeCreationContext.ImplementInterface<TestInterface>();
 
 			context.AddImplementation<int, int>("DoBar", i => i * 2);
-			context.AddImplmentation("DoFoo", () => Console.WriteLine("Doing this from a void implementation"));
+			context.AddImplementation("DoFoo", () => Console.WriteLine("Doing this from a void implementation"));
 
-			var obj = context.CreateType() as TestInterface;
+			var obj = context.CreateInstance() as TestInterface;
 
 			var obj2 = TypeCreationContext.New<TestInterface>();
 

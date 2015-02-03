@@ -33,7 +33,7 @@ namespace Emitter
 
 		#region Method Implementation Handlers
 
-		public void AddImplmentation(string methodName, Action implementation)
+		public void AddImplementation(string methodName, Action implementation)
 		{
 			ValidateDelegateCall(methodName, implementation);
 
@@ -105,7 +105,7 @@ namespace Emitter
 
 		public static T New<T>() where T : class
 		{
-			return ImplementInterface<T>().CreateType() as T;
+			return ImplementInterface<T>().CreateInstance() as T;
 		}
 
 		public static TypeCreationContext ImplementInterface<T>() where T : class
@@ -121,7 +121,7 @@ namespace Emitter
 			return new TypeCreationContext(type);
 		}
 
-		public object CreateType()
+		public object CreateInstance()
 		{
 			var builders = ILHelper.GetAssemblyAndModuleBuilders();
 
