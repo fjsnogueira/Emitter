@@ -6,10 +6,12 @@ using System.Reflection.Emit;
 
 namespace Emitter
 {
-	public class TypeCreationContext
+	public sealed class TypeCreationContext
 	{
 		public string TypeName { get; private set; }
-		public Type Type { get; private set; }
+
+		public Type BaseType { get; private set; }
+		public Type ImplementedType { get; private set; }
 
 		internal IDictionary<string, FieldBuilder> Fields { get; private set; }
 		internal IDictionary<string, PropertyBuilder> Properties { get; private set; }
@@ -17,11 +19,11 @@ namespace Emitter
 
 		internal TypeBuilder TypeBuilder { get; private set; }
 
-		private IDictionary<string, Delegate> methodImplementations;		
+		private IDictionary<string, Delegate> methodImplementations;
 
 		private TypeCreationContext(Type type)
 		{
-			this.Type = type;
+			this.BaseType = type;
 			this.TypeName = type.Name;
 
 			Fields = new Dictionary<string, FieldBuilder>();
@@ -33,12 +35,74 @@ namespace Emitter
 
 		#region Method Implementation Handlers
 
+		#region Void Return Methods
+
 		public void AddImplementation(string methodName, Action implementation)
 		{
 			ValidateDelegateCall(methodName, implementation);
 
 			methodImplementations.Add(methodName, implementation);
 		}
+
+		public void AddImplementation<T>(string methodName, Action<T> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2>(string methodName, Action<T1, T2> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3>(string methodName, Action<T1, T2, T3> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4>(string methodName, Action<T1, T2, T3, T4> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5>(string methodName, Action<T1, T2, T3, T4, T5> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6>(string methodName, Action<T1, T2, T3, T4, T5, T6> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6, T7>(string methodName, Action<T1, T2, T3, T4, T5, T6, T7> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6, T7, T8>(string methodName, Action<T1, T2, T3, T4, T5, T6, T7, T8> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		#endregion
+
+		#region Non Void Return Methods
 
 		public void AddImplementation<T, R>(string methodName, Func<T, R> implementation)
 		{
@@ -61,9 +125,46 @@ namespace Emitter
 			methodImplementations.Add(methodName, implementation);
 		}
 
+		public void AddImplementation<T1, T2, T3, T4, R>(string methodName, Func<T1, T2, T3, T4, R> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, R>(string methodName, Func<T1, T2, T3, T4, T5, R> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6, R>(string methodName, Func<T1, T2, T3, T4, T5, T6, R> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6, T7, R>(string methodName, Func<T1, T2, T3, T4, T5, T6, T7, R> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		public void AddImplementation<T1, T2, T3, T4, T5, T6, T7, T8, R>(string methodName, Func<T1, T2, T3, T4, T5, T6, T7, T8, R> implementation)
+		{
+			ValidateDelegateCall(methodName, implementation);
+
+			methodImplementations.Add(methodName, implementation);
+		}
+
+		#endregion
+
 		private void ValidateDelegateCall(string methodName, Delegate implementation)
 		{
-			var methodToInvoke = Type.GetMethod(methodName);
+			var methodToInvoke = BaseType.GetMethod(methodName);
 
 			if (methodToInvoke == null)
 				throw new ArgumentException(string.Format("Context type {0} does not contain method {1}", TypeName, methodName));
@@ -121,14 +222,17 @@ namespace Emitter
 			return new TypeCreationContext(type);
 		}
 
-		public object CreateInstance()
+		public Type CreateType()
 		{
+			if (ImplementedType != null)
+				return ImplementedType;
+
 			var builders = ILHelper.GetAssemblyAndModuleBuilders();
 
-			TypeBuilder = ILHelper.GetTypeBuilder(this.Type, builders.Item2);
+			TypeBuilder = ILHelper.GetTypeBuilder(this.BaseType, builders.Item2);
 
 			// Now lets add the interface implementation
-			TypeBuilder.AddInterfaceImplementation(Type);
+			TypeBuilder.AddInterfaceImplementation(BaseType);
 
 			bool hasImplementations = methodImplementations.Any();
 
@@ -137,43 +241,53 @@ namespace Emitter
 
 			ILHelper.AddDefaultConstructor(this, hasImplementations);
 
-			var properties = Type.GetProperties();
+			var properties = BaseType.GetProperties();
 			foreach (var pi in properties)
 				ILHelper.AddProperty(pi, this);
 
 			// Finally lets add each method in the interface to our new type.
 			// We have to explicitly exclude the get and setter methods for the properties within the interface
-			var methods = Type.GetMethods().Where(mi => !mi.Name.StartsWith("get_") && !mi.Name.StartsWith("set_"));
+			var methods = BaseType.GetMethods().Where(mi => !mi.Name.StartsWith("get_") && !mi.Name.StartsWith("set_"));
 			foreach (var mi in methods)
 				ILHelper.AddMethod(mi, this, hasImplementations && methodImplementations.ContainsKey(mi.Name));
 
 			try
 			{
-				var actualType = TypeBuilder.CreateType();
+				ImplementedType = TypeBuilder.CreateType();
 
 #if DEBUG
 				builders.Item1.Save("TestAsm.dll");
 #endif
-				var instance = Activator.CreateInstance(actualType);
-
-				if (hasImplementations)
-				{
-					var dictField = actualType.GetField(ILHelper.METHOD_DICTIONARY, BindingFlags.NonPublic | BindingFlags.Instance);
-
-					var dict = (IDictionary<string, Delegate>)dictField.GetValue(instance);
-
-					foreach (var impl in methodImplementations)
-						dict.Add(impl.Key, impl.Value);
-				}
-
-				return instance;
 			}
 			catch (Exception e)
 			{
 				Console.WriteLine(e.Message);
 			}
 
-			return null;
+			return ImplementedType;
+		}
+
+		public object CreateInstance()
+		{
+			if (ImplementedType == null)
+				CreateType();
+
+			if (ImplementedType == null)
+				return null;
+
+			var instance = Activator.CreateInstance(ImplementedType);
+
+			if (methodImplementations.Any())
+			{
+				var dictField = ImplementedType.GetField(ILHelper.METHOD_DICTIONARY, BindingFlags.NonPublic | BindingFlags.Instance);
+
+				var dict = (IDictionary<string, Delegate>)dictField.GetValue(instance);
+
+				foreach (var impl in methodImplementations)
+					dict.Add(impl.Key, impl.Value);
+			}
+
+			return instance;
 		}
 
 		#endregion
