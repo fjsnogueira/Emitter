@@ -3,7 +3,7 @@ Emitter
 
 A small project that allows you to implement any interface and selectively add method implementations. Useful for mocking objects for testing.
 
-#Simple Case
+## Simple Case
 
 If you just want a raw object that implements the bare bones of the interface add the following line of code
 
@@ -11,7 +11,7 @@ If you just want a raw object that implements the bare bones of the interface ad
 
 BAM! You have a working instance of TestInterface
 
-#Let's Get Complex
+## Let's Get Complex
 
 If you want to provide an implementation of any method on your interface we need to create the type in a different manner.
 	
@@ -27,7 +27,7 @@ Now we create the type and call the method
 	var obj = context.CreateInstance() as TestInterface;
 	obj.DoFoo(); // Writes out "Hello World" to the console
 
-#Desired Features
+## Desired Features
 
 Emitter is still a small working prototype, but I'd like to be able to add a much cleaner way to add method implementations instead of having
 to add method signatures for all permutations of Func<T> and Action/Action<T>. I'd also like to add the ability to add your own properties, or methods
